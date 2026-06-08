@@ -2,6 +2,9 @@
   "name": "tanstact-start-todo",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=22.12.0"
+  },
   "imports": {
     "#/*": "./src/*"
   },
