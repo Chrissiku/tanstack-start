@@ -1,5 +1,5 @@
-import { createFileRoute, Link } from '@tanstack/react-router'
-import { createServerFn } from '@tanstack/react-start'
+import { createFileRoute, Link, redirect, useRouter } from '@tanstack/react-router'
+import { createServerFn, useServerFn } from '@tanstack/react-start'
 import { db } from '@/db'
 import { Badge } from '#/components/ui/badge'
 import { Button } from '#/components/ui/button'
@@ -8,6 +8,11 @@ import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTi
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '#/components/ui/table'
 import { Checkbox } from '#/components/ui/checkbox'
 import { cn } from '#/lib/utils'
+import { ActionButton } from '#/components/ui/action-button'
+import z from 'zod'
+import { todos } from '#/db/schema'
+import { eq } from 'drizzle-orm'
+import { startTransition, useState } from 'react'
 
 const serverLoader = createServerFn({ method: 'GET' }).handler(async () => {
   return db.query.todos.findMany()
@@ -107,6 +112,33 @@ function TodoListTable({ todos }: {
   )
 }
 
+const deleteFn = createServerFn({ method: "POST" })
+  .inputValidator(z.object({
+    id: z.string().min(1),
+  })).handler(async ({ data }) => {
+    await db.delete(todos).where(eq(todos.id, data.id))
+
+    // throw redirect({ to: "/" })
+    return { error: true }
+
+  })
+
+
+const toggleFn = createServerFn({ method: "POST" })
+  .inputValidator(z.object({
+    id: z.string().min(1),
+    isCompleted: z.boolean(),
+  })).handler(async ({ data }) => {
+    await new Promise((res) => setTimeout(res, 1000))
+    await db.update(todos)
+      .set({ isCompleted: data.isCompleted })
+      .where(eq(todos.id, data.id))
+
+    // throw redirect({ to: "/" })
+    return { error: true }
+
+  })
+
 function TodoTableRow({ todo }: {
   todo: {
     id: string
@@ -115,27 +147,47 @@ function TodoTableRow({ todo }: {
     createdAt: Date
   }
 }) {
+  const deleteTodoFn = useServerFn(deleteFn)
+  const toggleTodoFn = useServerFn(toggleFn)
+  const [isCurrentComplete, setIsCurrentComplete] = useState(todo.isCompleted)
+  const router = useRouter()
+
   return (
-    <TableRow>
+    <TableRow onClick={(e) => {
+      const target = e.target as HTMLElement
+      if (target.closest("[data-actions]")) return
+
+      setIsCurrentComplete(!isCurrentComplete)
+      startTransition(async () => {
+        await toggleTodoFn({ data: { id: todo.id, isCompleted: !todo.isCompleted } })
+        router.invalidate()
+      })
+    }}>
+
       <TableCell>
         <Checkbox
-          checked={todo.isCompleted}
+          checked={isCurrentComplete}
           className='border border-black'
           onCheckedChange={() => { }} />
       </TableCell>
       <TableCell
-        className={cn('font-medium', todo.isCompleted && 'text-muted-foreground  line-through')}>{todo.name}</TableCell>
+        className={cn('font-medium', isCurrentComplete && 'text-muted-foreground  line-through')}>{todo.name}</TableCell>
       <TableCell>{todo.isCompleted ? 'Yes' : 'No'}</TableCell>
       <TableCell>{todo.createdAt.toLocaleDateString()}</TableCell>
-      <TableCell>
+      <TableCell data-actions>
         <Button variant='ghost' size='icon-sm' asChild>
           <Link to="/todos/$id/edit" params={{ id: todo.id }}>
             <EditIcon className='size-4' />
           </Link>
         </Button>
-        <Button variant='ghost' size='icon-sm'>
+        <ActionButton variant='ghost' size='icon-sm'
+          action={async () => {
+            const res = await deleteTodoFn({ data: { id: todo.id } })
+            router.invalidate()
+            return res
+          }}>
           <TrashIcon className='size-4 text-destructive' />
-        </Button>
+        </ActionButton>
       </TableCell>
     </TableRow>
   )
