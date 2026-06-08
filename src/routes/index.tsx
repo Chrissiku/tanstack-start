@@ -13,6 +13,7 @@ import z from 'zod'
 import { todos } from '#/db/schema'
 import { eq } from 'drizzle-orm'
 import { startTransition, useState } from 'react'
+import { LocalCountButton } from '#/components/LocalCountButton'
 
 const serverLoader = createServerFn({ method: 'GET' }).handler(async () => {
   return db.query.todos.findMany()
@@ -42,7 +43,8 @@ function App() {
             </Badge>
           )}
         </div>
-        <div>
+        <div className='flex gap-2'>
+          <LocalCountButton />
           <Button asChild size={'sm'}>
             <Link to="/todos/new">
               <PlusIcon className='size-4' />
